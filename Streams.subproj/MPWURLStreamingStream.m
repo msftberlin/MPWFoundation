@@ -12,6 +12,7 @@
 @interface MPWURLStreamingFetchHelper : MPWStream <NSURLSessionDelegate>
 
 @property (nonatomic, strong)  NSMutableSet *inflight;
+@property (nonatomic, strong) NSThread *targetThread;
 
 @end
 
@@ -22,12 +23,13 @@
 
 -(instancetype)initWithBaseURL:(NSURL*)newBaseURL target:aTarget
 {
-    MPWURLStreamingFetchHelper *helper = [MPWURLStreamingFetchHelper streamWithTarget:aTarget];
+    MPWURLStreamingFetchHelper *helper = [MPWURLStreamingFetchHelper streamWithTarget:aTarget];    
     NSURLSession *session=[NSURLSession sessionWithConfiguration:[self config]
                                                         delegate:helper
                                                    delegateQueue:nil];
     self.streamingDelegate=helper;
     self=[super initWithBaseURL:newBaseURL target:aTarget session:session];
+    helper.targetThread = self.targetThread;
     self.streamingDelegate.inflight = self.inflight;
     return self;
 }
@@ -61,7 +63,14 @@
 - (void)URLSession:(NSURLSession *)session dataTask:(NSURLSessionDataTask *)dataTask
     didReceiveData:(NSData *)data
 {
-    [target writeObject:data];
+    if (self.targetThread) {
+        [target performSelector:@selector(writeObject:)
+                        onThread:self.targetThread
+                        withObject:data
+                    waitUntilDone:NO];
+    } else {
+        [target writeObject:data];
+    }    
 }
 
 - (void)URLSession:(NSURLSession *)session task:(NSURLSessionTask *)task
